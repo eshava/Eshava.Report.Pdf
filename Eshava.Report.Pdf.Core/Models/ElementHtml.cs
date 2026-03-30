@@ -80,7 +80,7 @@ namespace Eshava.Report.Pdf.Core.Models
 
 		public void ConvertContentToHtml()
 		{
-			var content = ReplaceAmpersand(Content);
+			var content = EncodeCharacters(Content);
 			var interpreter = new HtmlInterpreter();
 
 			Content = interpreter.ConvertToHtml(content);
@@ -287,12 +287,21 @@ namespace Eshava.Report.Pdf.Core.Models
 			return (new Size(textSize.Width, textSize.Height), new Size(Width, height), referenceSize2.Width - (2 * referenceSize.Width));
 		}
 
-		private string ReplaceAmpersand(string text)
+		private string EncodeCharacters(string text)
+		{
+			text = EncodeCharacters(text, "&", "&amp;");
+			text = EncodeCharacters(text, "<", "&lt;");
+			text = EncodeCharacters(text, ">", "&gt;");
+
+			return text;
+		}
+
+		private string EncodeCharacters(string text, string characterToReplace, string replacement)
 		{
 			var startIndex = 0;
 			while (true)
 			{
-				var indexOf = text.IndexOf("&", startIndex);
+				var indexOf = text.IndexOf(characterToReplace, startIndex);
 				if (indexOf < 0)
 				{
 					break;
@@ -308,7 +317,7 @@ namespace Eshava.Report.Pdf.Core.Models
 						var before = text.Substring(0, indexOf);
 						var after = text.Substring(indexOf + 1);
 
-						text = before + "&amp;" + after;
+						text = before + replacement + after;
 					}
 				}
 				else
@@ -316,7 +325,7 @@ namespace Eshava.Report.Pdf.Core.Models
 					var before = text.Substring(0, indexOf);
 					var after = text.Substring(indexOf + 1);
 
-					text = before + "&amp;" + after;
+					text = before + replacement + after;
 				}
 			}
 
