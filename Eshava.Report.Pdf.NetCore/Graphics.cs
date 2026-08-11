@@ -18,12 +18,25 @@ namespace Eshava.Report.Pdf
 	{
 		private XGraphics _xGraphics;
 		private readonly Dictionary<string, SixLabors.ImageSharp.Image> _pictures;
+		private readonly Dictionary<string, XImage> _loadedImages;
 		private bool _isDisposed = false;
 
 		public Graphics(XGraphics xGraphics, Dictionary<string, SixLabors.ImageSharp.Image> pictures)
+			: this(xGraphics, pictures, new Dictionary<string, XImage>())
+		{
+		}
+
+		/// <summary>
+		/// The dictionary of already loaded images is meant to be shared by all pages of one
+		/// document. Every image element asks for its image several times (size calculation,
+		/// position calculation, drawing), and each of those calls used to re-encode the image
+		/// and to add another copy of it to the pdf.
+		/// </summary>
+		public Graphics(XGraphics xGraphics, Dictionary<string, SixLabors.ImageSharp.Image> pictures, Dictionary<string, XImage> loadedImages)
 		{
 			_xGraphics = xGraphics;
 			_pictures = pictures;
+			_loadedImages = loadedImages;
 		}
 
 		public void Dispose()
@@ -81,6 +94,11 @@ namespace Eshava.Report.Pdf
 				return null;
 			}
 
+			if (_loadedImages.TryGetValue(imageName, out var loadedImage))
+			{
+				return loadedImage == null ? null : new Image(loadedImage);
+			}
+
 			XImage image = null;
 			try
 			{
@@ -105,6 +123,9 @@ namespace Eshava.Report.Pdf
 			{
 				image = null;
 			}
+
+			// a failed image is cached as null on purpose, so that it is not retried on every access
+			_loadedImages[imageName] = image;
 
 			return image == null ? null : new Image(image);
 		}
