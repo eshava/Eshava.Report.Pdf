@@ -96,7 +96,7 @@ namespace Eshava.Report.Pdf.Core
 			try
 			{
 				// remove hr tags
-				text = Regex.Replace(text, @".<hr.*?>{1}", " ");
+				text = Regex.Replace(text, @"<hr.*?>{1}", " ");
 
 				var html = $"<div>{text.Replace("<br>", "<br/>")}</div>";
 				var xmlDocument = new XmlDocument();
