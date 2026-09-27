@@ -36,7 +36,10 @@ namespace Eshava.Report.Pdf.Extensions
 				var content = PdfSharpCore.Pdf.Content.ContentReader.ReadContent(page);
 				var fonts = page.ParseFonts();
 
-				ExtractText(content, pdfOperations, pageIndex, fonts);
+				// Every page starts with the default graphics state, so no font is carried over from the previous one
+				var textState = new TextState();
+
+				ExtractText(content, pdfOperations, pageIndex, fonts, textState);
 			}
 
 			return ProcessPdfOperations(pdfOperations)
@@ -46,11 +49,11 @@ namespace Eshava.Report.Pdf.Extensions
 				.ToList();
 		}
 
-		private static void ExtractText(CObject @object, IList<AbstractPdfOperation> pdfOperations, int pageIndex, Dictionary<string, FontResource> fonts)
+		private static void ExtractText(CObject @object, IList<AbstractPdfOperation> pdfOperations, int pageIndex, Dictionary<string, FontResource> fonts, TextState textState)
 		{
 			if (@object is CArray array)
 			{
-				ExtractText(array, pdfOperations, pageIndex, fonts);
+				ExtractText(array, pdfOperations, pageIndex, fonts, textState);
 			}
 			else if (@object is CComment comment)
 			{
@@ -70,7 +73,7 @@ namespace Eshava.Report.Pdf.Extensions
 			}
 			else if (@object is COperator @operator)
 			{
-				ExtractText(@operator, pdfOperations, pageIndex, fonts);
+				ExtractText(@operator, pdfOperations, pageIndex, fonts, textState);
 			}
 			else if (@object is CReal real)
 			{
@@ -78,11 +81,11 @@ namespace Eshava.Report.Pdf.Extensions
 			}
 			else if (@object is CSequence sequence)
 			{
-				ExtractText(sequence, pdfOperations, pageIndex, fonts);
+				ExtractText(sequence, pdfOperations, pageIndex, fonts, textState);
 			}
 			else if (@object is CString @string)
 			{
-				ExtractText(@string, pdfOperations, pageIndex, fonts);
+				ExtractText(@string, pdfOperations, pageIndex, fonts, textState);
 			}
 			else
 			{
@@ -90,15 +93,15 @@ namespace Eshava.Report.Pdf.Extensions
 			}
 		}
 
-		private static void ExtractText(CArray array, IList<AbstractPdfOperation> pdfOperations, int pageIndex, Dictionary<string, FontResource> fonts)
+		private static void ExtractText(CArray array, IList<AbstractPdfOperation> pdfOperations, int pageIndex, Dictionary<string, FontResource> fonts, TextState textState)
 		{
 			foreach (var element in array)
 			{
-				ExtractText(element, pdfOperations, pageIndex, fonts);
+				ExtractText(element, pdfOperations, pageIndex, fonts, textState);
 			}
 		}
 
-		private static void ExtractText(COperator @operator, IList<AbstractPdfOperation> pdfOperations, int pageIndex, Dictionary<string, FontResource> fonts)
+		private static void ExtractText(COperator @operator, IList<AbstractPdfOperation> pdfOperations, int pageIndex, Dictionary<string, FontResource> fonts, TextState textState)
 		{
 			if (@operator.OpCode.OpCodeName == OpCodeName.cm)
 			{
@@ -121,6 +124,7 @@ namespace Eshava.Report.Pdf.Extensions
 
 			if (@operator.OpCode.OpCodeName == OpCodeName.q)
 			{
+				textState.Save();
 				pdfOperations.Add(new SaveGraphicsState
 				{
 					PageIndex = pageIndex
@@ -131,6 +135,7 @@ namespace Eshava.Report.Pdf.Extensions
 
 			if (@operator.OpCode.OpCodeName == OpCodeName.Q)
 			{
+				textState.Restore();
 				pdfOperations.Add(new RestoreGraphicsState
 				{
 					PageIndex = pageIndex
@@ -152,9 +157,16 @@ namespace Eshava.Report.Pdf.Extensions
 
 			if (@operator.OpCode.OpCodeName == OpCodeName.Tf)
 			{
-				var textObject = pdfOperations[pdfOperations.Count - 1] as TextObject;
 				var fontName = @operator.Operands.OfType<CName>().FirstOrDefault()?.Name;
-				if (!fontName.IsNullOrEmpty())
+				if (fontName.IsNullOrEmpty())
+				{
+					return;
+				}
+
+				textState.FontName = fontName;
+
+				// Tf may also appear outside a text object, then there is no text object to note it in
+				if (pdfOperations.LastOrDefault() is TextObject textObject)
 				{
 					textObject.Elements.Add(new TextObjectElementFont
 					{
@@ -202,32 +214,26 @@ namespace Eshava.Report.Pdf.Extensions
 			{
 				foreach (var element in @operator.Operands)
 				{
-					ExtractText(element, pdfOperations, pageIndex, fonts);
+					ExtractText(element, pdfOperations, pageIndex, fonts, textState);
 				}
 			}
 		}
 
-		private static void ExtractText(CSequence sequence, IList<AbstractPdfOperation> pdfOperations, int pageIndex, Dictionary<string, FontResource> fonts)
+		private static void ExtractText(CSequence sequence, IList<AbstractPdfOperation> pdfOperations, int pageIndex, Dictionary<string, FontResource> fonts, TextState textState)
 		{
 			foreach (var element in sequence)
 			{
-				ExtractText(element, pdfOperations, pageIndex, fonts);
+				ExtractText(element, pdfOperations, pageIndex, fonts, textState);
 			}
 		}
 
-		private static void ExtractText(CString @string, IList<AbstractPdfOperation> pdfOperations, int pageIndex, Dictionary<string, FontResource> fonts)
+		private static void ExtractText(CString @string, IList<AbstractPdfOperation> pdfOperations, int pageIndex, Dictionary<string, FontResource> fonts, TextState textState)
 		{
 			var textObject = pdfOperations[pdfOperations.Count - 1] as TextObject;
 			var textObjectElement = textObject.Elements[textObject.Elements.Count - 1];
-			var fontName = "";
 
-			for (var index = textObject.Elements.Count - 2; index >= 0; index--)
-			{
-				if (textObject.Elements[index] is TextObjectElementFont)
-				{
-					fontName = textObject.Elements[index].Value;
-				}
-			}
+			// The font currently set, which may have been set in an earlier text object
+			var fontName = textState.FontName;
 
 			var text = @string.Value;
 			if (!fontName.IsNullOrEmpty() && fonts.ContainsKey(fontName))

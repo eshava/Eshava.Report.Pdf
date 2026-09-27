@@ -8,6 +8,8 @@
     <Company>Eshava</Company>
     <Product>Eshava.Report.Pdf</Product>
     <Configurations>Debug;Release;IncludeP2PAssets</Configurations>
+    <!-- Program.cs keeps its own entry point for running the document tests by hand -->
+    <GenerateProgramFile>false</GenerateProgramFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -29,6 +31,9 @@
   </ItemGroup>
 
 	<ItemGroup>
+		<PackageReference Include="FluentAssertions" Version="[7.2.0]" />
+		<PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
+		<PackageReference Include="MSTest.TestAdapter" Version="4.1.0" />
 		<PackageReference Include="MSTest.TestFramework" Version="4.1.0" />
 	</ItemGroup>
 

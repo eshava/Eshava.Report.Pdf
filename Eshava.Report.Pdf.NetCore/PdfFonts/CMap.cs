@@ -33,11 +33,8 @@ namespace Eshava.Report.Pdf.PdfFonts
 
 		public string Encode(string text)
 		{
-			// Convert to bytes
 			var chars = text.ToCharArray();
-			// Should we use Encoding.BigEndianUnicode.GetBytes(text) instead?
-			var be16 = Encoding.BigEndianUnicode.GetBytes(text);
-			var result = "";
+			var result = new StringBuilder();
 
 			// Find a substitution for every char in the text
 			for (var chrIdx = 0; chrIdx < chars.Length; chrIdx++)
@@ -45,70 +42,29 @@ namespace Eshava.Report.Pdf.PdfFonts
 				// Ranges should not overlap, but the spec and the real world...
 				// Start with 1 byte, see if we find a 1 byte match. If not try 2 bytes etc.
 				// CodeSpaceRange.NumberOfBytes should indicate how many bytes we map, but it doesn't in real life
-				Map map;
-				int cid = chars[chrIdx];
-				var range = CodeSpaceRanges.FirstOrDefault(r => r.Low <= cid && r.High >= cid);
-				if (range != null)
+				// A longer code is only tried while the text still holds that many bytes
+				for (var numberOfBytes = 1; numberOfBytes <= 4 && chrIdx + numberOfBytes <= chars.Length; numberOfBytes++)
 				{
-					if (range.Mapping.TryGetValue(cid, out map) && map.SourceByteLength == 1)
+					var cid = 0;
+					for (var byteIdx = 0; byteIdx < numberOfBytes; byteIdx++)
 					{
-						result += map.UnicodeValue;
+						cid = cid << 8 | chars[chrIdx + byteIdx];
+					}
 
-						continue;
+					var range = CodeSpaceRanges.FirstOrDefault(r => r.Low <= cid && r.High >= cid);
+					if (range != null && range.Mapping.TryGetValue(cid, out var map) && map.SourceByteLength == numberOfBytes)
+					{
+						result.Append(map.UnicodeValue);
+						chrIdx += numberOfBytes - 1;
+
+						break;
 					}
 				}
 
-				// 2-byte cid
-				cid = chars[chrIdx] << 8 | chars[chrIdx + 1];
-				range = CodeSpaceRanges.FirstOrDefault(r => r.Low <= cid && r.High >= cid);
-				if (range != null)
-				{
-					if (range.Mapping.TryGetValue(cid, out map) && map.SourceByteLength == 2)
-					{
-						result += map.UnicodeValue;
-						chrIdx++;
-
-						continue;
-					}
-
-				}
-
-				// 3-byte cid
-				cid = chars[chrIdx] << 16 | chars[chrIdx + 1] << 8 | chars[chrIdx + 2];
-				range = CodeSpaceRanges.FirstOrDefault(r => r.Low <= cid && r.High >= cid);
-				if (range != null)
-				{
-					if (range.Mapping.TryGetValue(cid, out map) && map.SourceByteLength == 2)
-					{
-						result += map.UnicodeValue;
-						chrIdx += 2;
-
-						continue;
-					}
-				}
-
-
-				// 4-byte cid
-				cid = chars[chrIdx] << 32 | chars[chrIdx + 1] << 16 | chars[chrIdx + 2] << 8 | chars[chrIdx + 3];
-				range = CodeSpaceRanges.FirstOrDefault(r => r.Low <= cid && r.High >= cid);
-				if (range != null)
-				{
-					if (range.Mapping.TryGetValue(cid, out map) && map.SourceByteLength == 2)
-					{
-						result += map.UnicodeValue;
-						chrIdx += 3;
-
-						continue;
-					}
-				}
-
-				// Fallback on using the cid... I don't think this is supposed to be done.
-				cid = chars[chrIdx];
-				result.Append((char)cid);
-
+				// A code without a mapping is left out: its value identifies a glyph, not a character
 			}
 
-			return result;
+			return result.ToString();
 		}
 
 		///
@@ -153,7 +109,10 @@ namespace Eshava.Report.Pdf.PdfFonts
 			}
 
 			// Order our code space ranges for the lookups
-			CodeSpaceRanges.OrderBy(r => r.NumberOfBytes).ThenBy(r => r.Low);
+			CodeSpaceRanges = CodeSpaceRanges
+				.OrderBy(r => r.NumberOfBytes)
+				.ThenBy(r => r.Low)
+				.ToList();
 		}
 
 		public void ParseMappings(string cMap)
@@ -181,7 +140,7 @@ namespace Eshava.Report.Pdf.PdfFonts
 			else if (beginbfcharIdx >= 0)
 			{
 				ParseBFChar(cMap.Substring(beginbfcharIdx + 11, bfCharLen - 11));
-				cMap = cMap.Substring(beginbfcharIdx = 11 + bfCharLen + 9 - 11);
+				cMap = cMap.Substring(beginbfcharIdx + 11 + bfCharLen + 9 - 11);
 			}
 			else if (beginbfrangeIdx >= 0)
 			{

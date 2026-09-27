@@ -6,6 +6,10 @@ two NuGet packages, **`Eshava.Report.Pdf.NetCore`** and **`Eshava.Report.Pdf.Net
 **Conventions:** documentation, code and commit messages are written in English. Line endings are
 pinned through `.gitattributes` — anything that may run on Linux must be checked out with LF.
 
+**Releases are recorded in `CHANGELOG.md`, not in the project files.** The two packages are
+versioned separately, so every entry names its package and version; the version itself is set
+when packing.
+
 ## Layout
 
 | Project | Target | Content |
@@ -16,6 +20,11 @@ pinned through `.gitattributes` — anything that may run on Linux must be check
 
 Test projects are named `Eshava.Test.Report.Pdf.<Variant>` and use MSTest with FluentAssertions.
 `Input/` in the repository root holds sample data.
+
+**Only `Eshava.Test.Report.Pdf.NetCore` runs under `dotnet test`.** It carries the test adapter and
+`Microsoft.NET.Test.Sdk`, with `GenerateProgramFile` off because its `Program.cs` keeps a `Main` for
+running the document tests by hand. `Eshava.Test.Report.Pdf.Core` references the test framework
+alone, so its tests compile and are never executed.
 
 ## Non-Obvious Mechanisms
 
@@ -34,6 +43,18 @@ this dependency.
 
 The `System.Runtime.Caching` version is conditioned per target framework — a new target needs a
 matching `ItemGroup`.
+
+**Text extraction reads the font from the text state, not from the text object.** `ExtractText`
+decodes every string through the `/ToUnicode` map of the font currently set. That font belongs to
+the graphics state: it outlives `ET`, may be set by a `Tf` outside a text object, and is saved and
+restored by `q` and `Q` — PdfSharpCore itself switches fonts inside one text object and writes
+text objects without a `Tf` of their own. Decoding with any other font yields wrong characters, or
+none. A code without a mapping is left out of the text, since its value names a glyph rather than
+a character.
+
+The extraction code (`PdfDocumentExtensions`, `PdfFonts/`) was taken over from two open source
+samples, named in the class comments, and is tested with PDFs built in the test itself from font
+dictionaries that carry nothing but a `/ToUnicode` map — independent of any installed font.
 
 ## Dependencies
 
