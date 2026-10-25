@@ -243,41 +243,52 @@ namespace Eshava.Report.Pdf.PdfFonts
 		///
 		private void ParseBFRange(string fbRange)
 		{
-			var pattern = @"\s?<([a-fA-F0-9]+)>\s?<([a-fA-F0-9]+)>\s?<([a-fA-F0-9]+)>";
-			Match match;
-			
-			while ((match = Regex.Match(fbRange, pattern)).Success)
+			// Either srcCodeLo srcCodeHi dstCodeLo, or srcCodeLo srcCodeHi [dstCode1 ... dstCoden] with one destination per code
+			var pattern = @"<([a-fA-F0-9]+)>\s*<([a-fA-F0-9]+)>\s*(?:<([a-fA-F0-9]+)>|\[((?:\s*<[a-fA-F0-9]+>)*)\s*\])";
+
+			foreach (Match match in Regex.Matches(fbRange, pattern))
 			{
-				// Pop the match from bfChar
-				fbRange = fbRange.Substring(match.Length);
+				// Convert our matches to ints
+				var srcCodeLow = Convert.ToInt32(match.Groups[1].Value, 16);
+				var srcCodeHigh = Convert.ToInt32(match.Groups[2].Value, 16);
+				var srcCodeByteLength = match.Groups[1].Value.Length / 2;
 
-				if (match.Groups.Count == 4)
+				// Ensure to is > then from
+				if (srcCodeLow > srcCodeHigh)
 				{
-					// Convert our matches to ints
-					var srcCodeLow = Convert.ToInt32(match.Groups[1].Value, 16);
-					var srcCodeHigh = Convert.ToInt32(match.Groups[2].Value, 16);
-					var dstCodeLow = (char)Convert.ToInt16(match.Groups[3].Value, 16);
+					continue;
+				}
 
-					// Ensure to is > then from
-					if (srcCodeLow > srcCodeHigh)
+				if (match.Groups[4].Success)
+				{
+					var dstCodes = Regex.Matches(match.Groups[4].Value, @"<([a-fA-F0-9]+)>");
+					for (var i = 0; i < dstCodes.Count && srcCodeLow + i <= srcCodeHigh; i++)
 					{
-						continue;
+						var ucode = ConvertDstCode(dstCodes[i].Groups[1].Value);
+						if (ucode == null)
+						{
+							continue;
+						}
+
+						AddMapping(srcCodeLow + i, ucode, srcCodeByteLength);
 					}
 
-					// Map all chars from fromGlyf to toGlyf and add
-					for (var i = 0; srcCodeLow + i <= srcCodeHigh; i++)
-					{
-						var glyf = srcCodeLow + i;
-						var dstCode = (char)(dstCodeLow + i);
-						
-						AddMapping(glyf, dstCode.ToString(), match.Groups[1].Value.Length / 2);
-					}
+					continue;
 				}
-				else
+
+				var dstCodeLow = (char)Convert.ToInt16(match.Groups[3].Value, 16);
+
+				// Map all chars from fromGlyf to toGlyf and add
+				for (var i = 0; srcCodeLow + i <= srcCodeHigh; i++)
 				{
-					// The format may have been srcCodeLo srcCodeHi [/dstCharName1../dstCharNamen]
-					// where dstCharName is a postscript language name object ie. /quotesingle
+					var glyf = srcCodeLow + i;
+					var dstCode = (char)(dstCodeLow + i);
+
+					AddMapping(glyf, dstCode.ToString(), srcCodeByteLength);
 				}
+
+				// The format may also have been srcCodeLo srcCodeHi [/dstCharName1../dstCharNamen]
+				// where dstCharName is a postscript language name object ie. /quotesingle, which is not read
 			}
 		}
 	}

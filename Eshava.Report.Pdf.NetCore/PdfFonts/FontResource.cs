@@ -11,6 +11,7 @@ namespace Eshava.Report.Pdf.PdfFonts
 	{
 		private readonly CMap _cmap;
 		private PdfSharpCore.Pdf.PdfArray _differences;
+		private readonly bool _isStandardEncoding;
 
 		///
 		/// Parse the fonts from the page's resources structure including the encoding differences and CMAPs
@@ -26,7 +27,11 @@ namespace Eshava.Report.Pdf.PdfFonts
 				_differences = differences;
 			}
 
-			// Extract the CMAPs 
+			// A simple font naming the standard encoding, whose codes differ from the Latin-1 the fallback below assumes.
+			// The other named encodings are not read yet.
+			_isStandardEncoding = resourceElements?["/Encoding"] is PdfSharpCore.Pdf.PdfName encoding && encoding.Value == "/StandardEncoding";
+
+			// Extract the CMAPs
 			var unicodeDictionary = resourceElements?.GetDictionary("/ToUnicode");
 			var stream = unicodeDictionary?.Stream;
 			if (stream != null)
@@ -69,8 +74,14 @@ namespace Eshava.Report.Pdf.PdfFonts
 				return _cmap.Encode(text);
 			}
 
+			// Without a map the codes are read through the font's encoding
+			if (_isStandardEncoding)
+			{
+				return StandardEncoding.Decode(text);
+			}
+
 			// Fallback on just displaying the text
-			
+
 			return text;
 		}
 	}

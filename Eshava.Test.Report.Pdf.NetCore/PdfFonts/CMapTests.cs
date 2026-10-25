@@ -87,6 +87,32 @@ namespace Eshava.Test.Report.Pdf.NetCore.PdfFonts
 			result.Should().Be("AB");
 		}
 
+		[TestMethod]
+		public void EncodeWithARangeOfSingleDestinationsTest()
+		{
+			// Arrange
+			var cMap = CreateCMap("<0000> <FFFF>", "1 beginbfrange\n<0000> <0003> [\n<fffd>\n<00fc>\n<00f6>\n<00e4>\n]\nendbfrange");
+
+			// Act
+			var result = cMap.Encode("\u0000\u0001\u0000\u0002\u0000\u0003");
+
+			// Assert
+			result.Should().Be("üöä");
+		}
+
+		[TestMethod]
+		public void EncodeWithRangesOfBothFormsTest()
+		{
+			// Arrange
+			var cMap = CreateCMap("<0000> <FFFF>", "2 beginbfrange\n<0001> <0002> [<00fc> <00df>]\n<0010> <0012> <0061>\nendbfrange");
+
+			// Act
+			var result = cMap.Encode("\u0000\u0010\u0000\u0001\u0000\u0012\u0000\u0002");
+
+			// Assert
+			result.Should().Be("aücß");
+		}
+
 		private static CMap CreateCMap(string codeSpaceRange, string mappings)
 		{
 			var dictionary = new PdfDictionary(new PdfDocument());

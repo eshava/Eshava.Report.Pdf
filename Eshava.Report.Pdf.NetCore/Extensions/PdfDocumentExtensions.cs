@@ -230,7 +230,20 @@ namespace Eshava.Report.Pdf.Extensions
 		private static void ExtractText(CString @string, IList<AbstractPdfOperation> pdfOperations, int pageIndex, Dictionary<string, FontResource> fonts, TextState textState)
 		{
 			var textObject = pdfOperations[pdfOperations.Count - 1] as TextObject;
-			var textObjectElement = textObject.Elements[textObject.Elements.Count - 1];
+
+			// A font switch does not move the text position, so a string shown after it continues the last positioned text.
+			// Without a position the text starts at the origin of the text object.
+			var textObjectElement = textObject.Elements.LastOrDefault(element => element is not TextObjectElementFont);
+			if (textObjectElement == null)
+			{
+				textObjectElement = new TextObjectElementRelative
+				{
+					Value = "",
+					ShiftPosX = 0,
+					ShiftPosY = 0
+				};
+				textObject.Elements.Add(textObjectElement);
+			}
 
 			// The font currently set, which may have been set in an earlier text object
 			var fontName = textState.FontName;

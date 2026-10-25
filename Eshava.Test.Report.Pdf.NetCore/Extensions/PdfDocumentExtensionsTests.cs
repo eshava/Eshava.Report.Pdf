@@ -71,6 +71,58 @@ namespace Eshava.Test.Report.Pdf.NetCore.Extensions
 			result.Should().Equal("ac");
 		}
 
+		[TestMethod]
+		public void ExtractTextContinuesTheTextAfterAFontSwitchTest()
+		{
+			// Arrange
+			var content = "BT /F0 10 Tf 50 700 Td <00010002> Tj /F1 10 Tf <0010> Tj /F0 10 Tf <0003> Tj ET";
+
+			// Act
+			var result = ExtractText(content);
+
+			// Assert
+			result.Should().Equal("abXc");
+		}
+
+		[TestMethod]
+		public void ExtractTextKeepsATextWithoutPositionTest()
+		{
+			// Arrange
+			var content = "BT /F0 10 Tf <0001> Tj ET";
+
+			// Act
+			var result = ExtractText(content);
+
+			// Assert
+			result.Should().Equal("a");
+		}
+
+		[TestMethod]
+		public void ExtractTextReadsTheStandardEncodingTest()
+		{
+			// Arrange
+			var content = "BT /F2 10 Tf 50 700 Td (Stra\\373e \\264 \\252Text\\272) Tj ET";
+
+			// Act
+			var result = ExtractText(content);
+
+			// Assert
+			result.Should().Equal("Straße · “Text”");
+		}
+
+		[TestMethod]
+		public void ExtractTextSwitchesFromTheStandardEncodingToAMapTest()
+		{
+			// Arrange
+			var content = "BT /F2 10 Tf 50 700 Td (Gro\\373) Tj /F0 10 Tf <0001> Tj /F2 10 Tf (e) Tj ET";
+
+			// Act
+			var result = ExtractText(content);
+
+			// Assert
+			result.Should().Equal("Großae");
+		}
+
 		private static List<string> ExtractText(string content)
 		{
 			using var stream = new MemoryStream();
@@ -92,6 +144,7 @@ namespace Eshava.Test.Report.Pdf.NetCore.Extensions
 			var fonts = new PdfDictionary(document);
 			fonts.Elements["/F0"] = CreateFont(document, CMAP_REGULAR);
 			fonts.Elements["/F1"] = CreateFont(document, CMAP_BOLD);
+			fonts.Elements["/F2"] = CreateStandardEncodingFont(document);
 			page.Resources.Elements["/Font"] = fonts;
 
 			page.Contents.AppendContent().CreateStream(Encoding.ASCII.GetBytes(content));
@@ -120,6 +173,20 @@ namespace Eshava.Test.Report.Pdf.NetCore.Extensions
 			font.Elements["/Type"] = new PdfName("/Font");
 			font.Elements["/Subtype"] = new PdfName("/Type0");
 			font.Elements["/ToUnicode"] = toUnicode.Reference;
+			document.Internals.AddObject(font);
+
+			return font.Reference;
+		}
+
+		/// <summary>
+		/// A simple font without a /ToUnicode map, read through its encoding alone
+		/// </summary>
+		private static PdfReference CreateStandardEncodingFont(PdfDocument document)
+		{
+			var font = new PdfDictionary(document);
+			font.Elements["/Type"] = new PdfName("/Font");
+			font.Elements["/Subtype"] = new PdfName("/Type1");
+			font.Elements["/Encoding"] = new PdfName("/StandardEncoding");
 			document.Internals.AddObject(font);
 
 			return font.Reference;

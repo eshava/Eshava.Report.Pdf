@@ -50,7 +50,10 @@ the graphics state: it outlives `ET`, may be set by a `Tf` outside a text object
 restored by `q` and `Q` — PdfSharpCore itself switches fonts inside one text object and writes
 text objects without a `Tf` of their own. Decoding with any other font yields wrong characters, or
 none. A code without a mapping is left out of the text, since its value names a glyph rather than
-a character.
+a character. **A font switch does not move the text position**: a string shown after a `Tf` continues
+the last positioned text — some writers switch to a font of their own for every umlaut. **A font
+without a `/ToUnicode` map is read through its encoding**; only `/StandardEncoding` is translated,
+every other one is taken as Latin-1.
 
 The extraction code (`PdfDocumentExtensions`, `PdfFonts/`) was taken over from two open source
 samples, named in the class comments, and is tested with PDFs built in the test itself from font
